@@ -1,0 +1,10 @@
+application:
+  name: caprover
+  pods:
+  - name: app
+    image: caprover/caprover:latest
+    path: /
+    servicePorts:
+    - 3000
+    vars:
+      MAIN_NODE_DOMAIN_NAME: "relaxed-weasel-caprover.cloud.nexlayer.ai"
