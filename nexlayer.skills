@@ -18,7 +18,7 @@ project:
   port: 80
   live_url: "https://relaxed-weasel-caprover.cloud.nexlayer.ai"
   deploy_branch: nexlayer
-  repo: "https://github.com/armondHonore/caprover"
+  repo: "https://github.com/armondhonore/CapRover"
   config_files:
     - nexlayer.yaml          # deployment topology (pods, ports, env vars)
     - Dockerfile             # container build recipe
