@@ -8,3 +8,4 @@ application:
     - 3000
     vars:
       MAIN_NODE_DOMAIN_NAME: "relaxed-weasel-caprover.cloud.nexlayer.ai"
+      ACCEPTED_TERMS: "true"
