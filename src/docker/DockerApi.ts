@@ -18,6 +18,7 @@ import {
     PreDeployFunction,
 } from '../models/OtherTypes'
 import { ServerDockerInfo } from '../models/ServerDockerInfo'
+import NexlayerOrchestrator from '../nexlayer/NexlayerOrchestrator'
 import BuildLog from '../user/BuildLog'
 import CaptainConstants from '../utils/CaptainConstants'
 import EnvVars from '../utils/EnvVars'
@@ -153,6 +154,12 @@ class DockerApi {
         const self = this
         retryCount = retryCount || 0
 
+        if (CaptainConstants.isNexlayerNative) {
+            // No Swarm nodes in Nexlayer-native mode. Return a synthetic node id
+            // so callers that just need *a* node to attach to keep working.
+            return Promise.resolve('nexlayer-node')
+        }
+
         return self.dockerode
             .listTasks({
                 filters: {
@@ -208,6 +215,12 @@ class DockerApi {
     getAllServices() {
         const self = this
 
+        if (CaptainConstants.isNexlayerNative) {
+            // Nexlayer owns the running set; CapRover's app list is driven by
+            // its own datastore, so an empty Swarm service list is correct.
+            return Promise.resolve([] as unknown as DockerService[])
+        }
+
         return Promise.resolve()
             .then(function () {
                 return self.dockerode.listServices()
@@ -227,6 +240,28 @@ class DockerApi {
 
     getNodesInfo() {
         const self = this
+
+        if (CaptainConstants.isNexlayerNative) {
+            // Present the Nexlayer platform as a single logical manager node so
+            // the dashboard's cluster view renders and node-id checks pass.
+            const ret: ServerDockerInfo[] = [
+                {
+                    nodeId: 'nexlayer-node',
+                    type: 'manager',
+                    isLeader: true,
+                    hostname: 'nexlayer',
+                    architecture: 'amd64',
+                    operatingSystem: 'linux',
+                    nanoCpu: 0,
+                    memoryBytes: 0,
+                    dockerEngineVersion: 'nexlayer-native',
+                    ip: '127.0.0.1',
+                    state: 'ready',
+                    status: 'active',
+                } as unknown as ServerDockerInfo,
+            ]
+            return Promise.resolve(ret)
+        }
 
         return Promise.resolve()
             .then(function () {
@@ -789,6 +824,14 @@ class DockerApi {
         resourcesObject?: IDockerContainerResource
     ) {
         const self = this
+
+        if (CaptainConstants.isNexlayerNative) {
+            return NexlayerOrchestrator.get().ensureService(
+                serviceName,
+                imageName
+            ) as any
+        }
+
         const ports: IDockerApiPort[] = []
 
         if (portsToMap) {
@@ -889,6 +932,9 @@ class DockerApi {
 
     removeServiceByName(serviceName: string) {
         const self = this
+        if (CaptainConstants.isNexlayerNative) {
+            return NexlayerOrchestrator.get().removeService(serviceName)
+        }
         return self.dockerode.getService(serviceName).remove()
     }
 
@@ -917,6 +963,11 @@ class DockerApi {
     }
 
     isServiceRunningByName(serviceName: string) {
+        if (CaptainConstants.isNexlayerNative) {
+            return Promise.resolve(
+                NexlayerOrchestrator.get().isServiceKnown(serviceName)
+            )
+        }
         return this.dockerode
             .getService(serviceName)
             .inspect()
@@ -1076,6 +1127,11 @@ class DockerApi {
     ensureSecretOnService(serviceName: string, secretName: string) {
         const self = this
 
+        if (CaptainConstants.isNexlayerNative) {
+            // No Swarm secrets. Report "already existed" so callers continue.
+            return Promise.resolve(true)
+        }
+
         let secretToExpose: Docker.Secret
 
         return self.dockerode
@@ -1166,6 +1222,10 @@ class DockerApi {
     ensureSecret(secretKey: string, valueIfNotExist: string) {
         const self = this
 
+        if (CaptainConstants.isNexlayerNative) {
+            return Promise.resolve()
+        }
+
         return this.checkIfSecretExist(secretKey).then(function (secretExists) {
             if (secretExists) {
                 return
@@ -1210,6 +1270,11 @@ class DockerApi {
 
     ensureServiceConnectedToNetwork(serviceName: string, networkName: string) {
         const self = this
+
+        if (CaptainConstants.isNexlayerNative) {
+            return Promise.resolve()
+        }
+
         let networkId: string
 
         return self.dockerode
@@ -1261,6 +1326,11 @@ class DockerApi {
 
     ensureOverlayNetwork(networkName: string, networkOverride: any) {
         const self = this
+
+        if (CaptainConstants.isNexlayerNative) {
+            // Nexlayer provides pod networking (<podName>.pod:<port>).
+            return Promise.resolve(true)
+        }
 
         return self.dockerode
             .getNetwork(networkName)
@@ -1348,6 +1418,20 @@ class DockerApi {
         preDeployFunction: PreDeployFunction | undefined
     ) {
         const self = this
+
+        if (CaptainConstants.isNexlayerNative) {
+            // This is the real Docker->Nexlayer deploy seam. A CapRover service
+            // update becomes a Nexlayer deploy of the equivalent app/pod.
+            return NexlayerOrchestrator.get().deployApp({
+                serviceName,
+                imageName,
+                instanceCount,
+                ports: (ports || []).map((p) => p.containerPort).filter(Boolean),
+                envVars: arrayOfEnvKeyAndValue || [],
+                volumes: volumes || [],
+            }) as any
+        }
+
         return self.dockerode
             .getService(serviceName)
             .inspect()
@@ -1636,6 +1720,9 @@ class DockerApi {
 
     isNodeManager(nodeId: string) {
         const self = this
+        if (CaptainConstants.isNexlayerNative) {
+            return Promise.resolve(true)
+        }
         return self.dockerode
             .getNode(nodeId)
             .inspect()
@@ -1646,6 +1733,14 @@ class DockerApi {
 
     getLogForService(serviceName: string, tailCount: number, encoding: string) {
         const self = this
+        if (CaptainConstants.isNexlayerNative) {
+            // App logs live in the Nexlayer platform (nexlayer_get_deployment_logs).
+            // Return a placeholder so the dashboard's log view renders instead
+            // of erroring on a missing Docker socket.
+            return Promise.resolve(
+                `[nexlayer-native] Logs for "${serviceName}" are managed by the Nexlayer platform and are not available through the Docker log API in this mode.`
+            )
+        }
         return Promise.resolve() //
             .then(function () {
                 return self.dockerode

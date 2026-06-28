@@ -9,7 +9,20 @@ RUN npm ci && \
      npm run build && \
      npm ci --omit=dev && \
      npm cache clean --force
-      
+
+# Build the CapRover dashboard frontend (lives in a separate repo upstream).
+# The official release image bakes this in at publish time; we clone + build it
+# here so the dashboard is served at "/" without a Docker daemon present.
+RUN git clone --depth 1 https://github.com/caprover/caprover-frontend.git /tmp/caprover-frontend && \
+     cd /tmp/caprover-frontend && \
+     export NODE_OPTIONS=--openssl-legacy-provider && \
+     yarn install --no-cache --frozen-lockfile --network-timeout 600000 && \
+     yarn run build && \
+     mv ./build /usr/src/app/dist-frontend && \
+     cd / && \
+     rm -rf /tmp/caprover-frontend && \
+     yarn cache clean
+
 ENV NODE_ENV production
 ENV PORT 3000
 EXPOSE 3000

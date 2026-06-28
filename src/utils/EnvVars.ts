@@ -36,6 +36,13 @@ export default {
 
     BY_PASS_PROXY_CHECK: process.env.BY_PASS_PROXY_CHECK,
 
+    // Nexlayer-native mode: run CapRover's PaaS dashboard with the Nexlayer
+    // platform as the orchestration backend instead of Docker Swarm. When set,
+    // the boot path skips every Docker/Swarm requirement (socket, swarm
+    // manager checks, overlay network, Docker secrets) so the server stays up
+    // and serves the dashboard with no /var/run/docker.sock present.
+    CAPROVER_NEXLAYER_NATIVE: !!process.env.CAPROVER_NEXLAYER_NATIVE,
+
     CAPTAIN_DOCKER_API: process.env.CAPTAIN_DOCKER_API,
 
     CAPTAIN_IS_DEBUG: !!process.env.CAPTAIN_IS_DEBUG,

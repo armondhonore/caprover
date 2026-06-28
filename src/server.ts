@@ -6,6 +6,7 @@ console.log('Captain Starting ...')
 import * as http from 'http'
 import app, { initializeCaptainWithDelay } from './app'
 import { AnyError } from './models/OtherTypes'
+import CaptainManager from './user/system/CaptainManager'
 import CaptainConstants from './utils/CaptainConstants'
 import * as CaptainInstaller from './utils/CaptainInstaller'
 import EnvVars from './utils/EnvVars'
@@ -22,6 +23,17 @@ function startServer() {
         console.log('Installing Captain Service ...')
         CaptainInstaller.install()
         return
+    }
+
+    if (CaptainConstants.isNexlayerNative) {
+        // Prime the salt + datastore encryption synchronously BEFORE we start
+        // listening so the very first dashboard/API request can't race the
+        // async init (the injector throws "Salt is not set" otherwise).
+        try {
+            CaptainManager.get().primeNexlayerNativeSaltSync()
+        } catch (e) {
+            console.error('Nexlayer-native salt prime failed (continuing): ' + e)
+        }
     }
 
     initializeCaptainWithDelay()

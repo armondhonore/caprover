@@ -85,6 +85,20 @@ class CaptainManager {
     }
 
     initialize() {
+        // Nexlayer-native mode: the Nexlayer platform is the orchestration
+        // backend, so there is no Docker daemon, no Swarm, and no Docker
+        // secrets. The stock init path below funnels every step through
+        // DockerApi (getNodeIdByServiceName -> isNodeManager -> overlay
+        // network -> Docker secret salt ...) and its .catch exits the process
+        // after 5s, which is exactly the ~6s-then-CrashLoop symptom without a
+        // socket. The native path stands the server up with only the pieces
+        // the dashboard needs (salt + datastore encryption), never touching
+        // Docker and never calling process.exit.
+        if (CaptainConstants.isNexlayerNative) {
+            this.initializeNexlayerNative()
+            return
+        }
+
         // If a linked file / directory is deleted on the host, it loses the connection to
         // the container and needs an update to be picked up again.
 
@@ -288,6 +302,82 @@ class CaptainManager {
                 setTimeout(function () {
                     process.exit(0)
                 }, 5000)
+            })
+    }
+
+    // Native salt is normally a Docker swarm secret. Without Docker we persist
+    // it to the data directory (mounted on a Nexlayer PVC): generated once,
+    // reused on every restart so sessions / encrypted data survive.
+    //
+    // This is done SYNCHRONOUSLY and eagerly (before server.listen) so the
+    // very first request can't race the salt setup — the injector middleware
+    // calls Authenticator.getAuthenticator() on every request, which throws
+    // "Salt is not set" until the salt exists. Idempotent: safe to call again
+    // from initializeNexlayerNative().
+    primeNexlayerNativeSaltSync() {
+        if (this.captainSalt) {
+            return
+        }
+        const saltFilePath = `${CaptainConstants.captainDataDirectory}/captain-salt`
+        fs.ensureDirSync(CaptainConstants.captainDataDirectory)
+        let salt = ''
+        if (fs.pathExistsSync(saltFilePath)) {
+            salt = fs.readFileSync(saltFilePath).toString()
+        }
+        if (!salt) {
+            salt = CaptainConstants.isDebug ? DEBUG_SALT : uuid()
+            fs.outputFileSync(saltFilePath, salt)
+        }
+        this.captainSalt = salt
+        Authenticator.setMainSalt(this.getCaptainSalt())
+        this.dataStore.setEncryptionSalt(this.getCaptainSalt())
+    }
+
+    // Nexlayer-native boot. No Docker, no Swarm, no Docker secrets. Brings up
+    // exactly enough state for the dashboard + API to serve: a persisted salt
+    // (so login/JWT works across restarts), datastore encryption, and the app
+    // registry. Crucially: the .catch logs and continues instead of
+    // process.exit, so a transient error can never CrashLoop the pod.
+    initializeNexlayerNative() {
+        const self = this
+
+        self.refreshForceSslState()
+            .then(function () {
+                return fs.ensureDir(CaptainConstants.captainRootDirectoryTemp)
+            })
+            .then(function () {
+                return fs.ensureDir(
+                    CaptainConstants.captainRootDirectoryGenerated
+                )
+            })
+            .then(function () {
+                // Salt + datastore encryption (idempotent if already primed
+                // synchronously at startup).
+                self.primeNexlayerNativeSaltSync()
+            })
+            .then(function () {
+                // Best-effort: initialize the app registry so the dashboard's
+                // app list renders. In native mode ServiceManager talks to the
+                // Nexlayer-backed DockerApi stub, so this never touches Docker.
+                return self.ensureAllAppsInited().catch(function (err) {
+                    Logger.e(err)
+                })
+            })
+            .then(function () {
+                self.inited = true
+                Logger.d(
+                    '**** CapRover is initialized in Nexlayer-native mode (no Docker/Swarm) and ready to serve! ****'
+                )
+            })
+            .catch(function (error) {
+                // NEVER exit in native mode. A failure here must not CrashLoop
+                // the pod. Mark inited so the dashboard/API still serve; the
+                // operator can fix config and the next request will work.
+                Logger.e(error)
+                self.inited = true
+                Logger.w(
+                    'Nexlayer-native init hit an error but is continuing (no process.exit). Dashboard will still serve.'
+                )
             })
     }
 
