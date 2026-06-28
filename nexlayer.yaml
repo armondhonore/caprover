@@ -9,3 +9,5 @@ application:
     vars:
       MAIN_NODE_DOMAIN_NAME: "relaxed-weasel-caprover.cloud.nexlayer.ai"
       ACCEPTED_TERMS: "true"
+      MAIN_NODE_IP_ADDRESS: "127.0.0.1"
+      BY_PASS_PROXY_CHECK: "TRUE"
