@@ -1,100 +1,153 @@
 # Nexlayer — caprover
 
-**Live:** [https://relaxed-weasel-caprover.cloud.nexlayer.ai](https://relaxed-weasel-caprover.cloud.nexlayer.ai)  
+<!-- nexlayer:meta version=1 analyzed=2026-06-28T14:21:00Z repo=https://github.com/armondHonore/caprover branch=nexlayer -->
 
-**Runtime:**  · **Port:** auto-detected · **Deploy branch:** master
+> **For AI agents (Claude Code, Cursor, Gemini CLI, Copilot):**
+> This file is the **project context** for this Nexlayer deployment — tech stack, env vars, secrets, live URL.
+> For full platform detail (nexlayer.yaml schema, Dockerfile rules, CI/CD, task recipes) read **`nexlayer.skills`** in this repo.
+>
+> **Critical rules (full detail in `nexlayer.skills`):**
+> - Inter-pod refs: `${podName:port}` only — never `localhost` or bare hostnames
+> - Docker Hub images: prefix with `mirror.gcr.io/library/` — bare tags fail on the cluster
+> - Secrets: set in the Nexlayer dashboard — never commit to `nexlayer.yaml` or Dockerfile
+>
+> **This file:** `agent-managed` sections update automatically. `user-editable` sections (Local Development Setup, Nexlayer Deployment Plan, Build Notes) are yours — preserved across re-analysis.
 
----
+## Project Summary
+<!-- nexlayer:section agent-managed=project_summary -->
+CapRover is an application and database deployment platform that provides a Web GUI and CLI to manage Docker containers, Nginx load balancing, and Let's Encrypt SSL certificates.
+<!-- nexlayer:end -->
 
-## How this deployment works
+## Technology Stack
+<!-- nexlayer:section agent-managed=tech_stack -->
+| Name | Kind | Version | Detected From |
+|------|------|---------|---------------|
+| TypeScript | language | ^5.8.3 | package.json |
+| Node.js | language | 22-alpine | dockerfile-captain.release |
+| Express | framework | ^5.1.0 | package.json |
+| Docker | infra | latest | README.md |
+| Nginx | infra | latest | README.md |
+<!-- nexlayer:end -->
 
-**caprover** is deployed on [Nexlayer](https://nexlayer.ai) — a container-native
-platform where every push to `master` triggers a fully automated build-and-deploy
-pipeline with no infrastructure management required:
+## Repository Structure
+<!-- nexlayer:section agent-managed=structure_map -->
+- src/ — Core application logic and TypeScript source
+- public/ — Static assets for the Web GUI
+- template/ — Nginx and configuration templates
+- built/ — Compiled JavaScript output
+- dev-scripts/ — Shell scripts for local environment reset and cleanup
+<!-- nexlayer:end -->
 
-1. **AI analysis** — the Nexlayer agent reads your repo, understands your runtime,
-   dependencies, and project structure, then writes an optimised Dockerfile and
-   `nexlayer.yaml` tailored to your app.
-2. **Container build** — your image is built with Kaniko on Nexlayer's GPU cluster.
-   Build layer cache means subsequent builds are fast.
-3. **Deploy** — the image is deployed to a dedicated Nexlayer namespace.
-   A stable `*.cloud.nexlayer.ai` URL is ready within minutes.
-4. **Auto-fix loop** — if the build fails, the agent attempts up to 7 autonomous
-   repair attempts (patching the Dockerfile or nexlayer.yaml) before surfacing
-   the error. Most common build errors are resolved without human intervention.
-5. **CI/CD write-back** — a working GitHub Actions workflow (`.github/workflows/nexlayer.yml`)
-   is committed to your repo so every future push auto-deploys.
+## External Services Required
+<!-- nexlayer:section agent-managed=external_deps -->
+Services that must be configured separately (not deployed by Nexlayer):
 
----
+- Docker Engine API
+- Let's Encrypt API
+- GitHub API (via simple-git)
+<!-- nexlayer:end -->
 
-## Configuration files
+## Local Development Setup
+<!-- nexlayer:section user-editable=local_setup -->
+### Prerequisites
 
-### `nexlayer.yaml` — deployment manifest
+- Node.js >= 20
+- npm
+- Docker
 
-Defines the pods (containers), ports, and environment that make up your app.
-The agent generates this; you can edit it freely.
+### Environment variables
+
+Copy `.env.example` to `.env.local` and fill in:
+
+```
+NODE_ENV=development
+CAPROVER_PORT=3000
+```
+
+### Steps
+
+1. `npm install` — Install project dependencies
+2. `npm run build` — Compile TypeScript to JavaScript
+3. `npm run dev` — Run development environment scripts
+
+<!-- nexlayer:end -->
+
+## Nexlayer Setup
+<!-- nexlayer:section agent-managed=nexlayer_setup -->
+### Pod Environment Variables
+
+| Pod | Variable | Value | Kind |
+|-----|----------|-------|------|
+| `app` | `NODE_ENV` | `"production"` | plain |
+| `app` | `PORT` | `"3000"` | plain |
+| `app` | `HOSTNAME` | `"0.0.0.0"` | plain |
+
+### nexlayer.yaml
 
 ```yaml
 application:
   name: caprover
   pods:
-  - name: app
-    image: mirror.gcr.io/caprover/caprover:latest
-    path: /
-    servicePorts:
-    - 3000
-    vars:
-      MAIN_NODE_DOMAIN_NAME: "relaxed-weasel-caprover.cloud.nexlayer.ai"
-      ACCEPTED_TERMS: "true"
-      MAIN_NODE_IP_ADDRESS: "127.0.0.1"
-      BY_PASS_PROXY_CHECK: "TRUE"
+    - name: app
+      image: "registry.nexlayer.io/user_01kece1xyh817dwff7wnarhkxd/caprover:19f0e9a95fe"
+      path: /
+      servicePorts:
+        - 3000
+      vars:
+        NODE_ENV: "production"
+        PORT: "3000"
+        HOSTNAME: "0.0.0.0"
 ```
 
-**Common edits:**
+<!-- nexlayer:end -->
 
-| Goal | What to change |
-|---|---|
-| Change exposed port | `servicePorts:` + `EXPOSE` in Dockerfile |
-| Add environment variable | `vars:` under the relevant pod |
-| Add a database (Postgres, MySQL, Redis) | New entry in `pods:`, then reference via `<podName>.pod:<port>` |
-| Change the URL slug / app name | `application.name:` |
-| Add a worker / background job | New pod with its own image and no `path:` |
+## Nexlayer Deployment Plan
+<!-- nexlayer:section user-editable=deployment_plan -->
+### Pod Topology
 
-### `Dockerfile` — container recipe
+| Pod | Image | Port | Role |
+|-----|-------|------|------|
+| captain | mirror.gcr.io/library/node:22-alpine | 3000 | web |
 
-Generated by the Nexlayer agent for your runtime. Edit it freely.
-The pipeline always uses whatever `Dockerfile` is in your repo — the agent
-only regenerates it if you delete it or on the very first deploy.
+### Deployment notes
 
-### `.github/workflows/nexlayer.yml` — CI/CD
+- The captain pod requires access to the host Docker socket to manage other containers.
+- Since this is a management platform, it orchestrates other pods; internal communications for managed apps must follow the <podName>.pod:<port> pattern.
 
-Triggers on:
-- **Push** to `master` → production redeploy
-- **Pull request** → preview deploy with a unique URL posted as a PR comment
-- **Manual** → run on demand from the Actions tab (no commit required)
+<!-- nexlayer:end -->
 
-The workflow authenticates with a **durable** `NEXLAYER_API_KEY` secret — it does
-not expire after 1 hour like GitHub's `GITHUB_TOKEN`.
+## Build Notes
+<!-- nexlayer:section user-editable=build_notes -->
+<!-- Add notes for future builds here — preserved across re-analysis -->
+<!-- nexlayer:end -->
 
----
+## Nexlayer Configuration
+<!-- nexlayer:section agent-managed=nexlayer_config -->
+**Last deployed:** 2026-06-28T14:27:26Z  
+**Live URL:** https://relaxed-weasel-caprover.cloud.nexlayer.ai  
+**Runtime:**  · **Port:** auto-detected  
+**Deploy branch:** nexlayer  
 
-## Working with AI coding agents
+```yaml
+application:
+  name: caprover
+  pods:
+    - name: app
+      image: "registry.nexlayer.io/user_01kece1xyh817dwff7wnarhkxd/caprover:19f0e9a95fe"
+      path: /
+      servicePorts:
+        - 3000
+      vars:
+        NODE_ENV: "production"
+        PORT: "3000"
+        HOSTNAME: "0.0.0.0"
+```
+<!-- nexlayer:end -->
 
-When asking Claude Code, Cursor, GitHub Copilot, or Gemini CLI to add features,
-include this context in your prompt:
-
-> *"This project is deployed on Nexlayer. The deployment manifest is `nexlayer.yaml`.
-> The container exposes port auto-detected. When adding a new service (database, cache,
-> worker), add it as a new pod in `nexlayer.yaml` and reference it with
-> `<podName>.pod:<port>` syntax. CI/CD runs on push to `master`."*
-
-The `nexlayer.skills` file in this repo gives agents structured guidance on the
-Nexlayer platform, including schema reference, common patterns, and anti-patterns.
-
----
-
-## Useful links
-
-- **Dashboard:** [nexlayer.ai](https://nexlayer.ai) — view deployments, logs, domains, API keys
-- **Agent:** [agent.nexlayer.com](https://agent.nexlayer.com) — chat interface + REST API
-- **Docs:** [nexlayer.ai/docs](https://nexlayer.ai/docs)
+## Build History
+<!-- nexlayer:section agent-managed=build_history -->
+| Date | Status | Notes |
+|------|--------|-------|
+| 2026-06-28T14:21:00Z | analyzed | initial repo analysis |
+| 2026-06-28T14:27:26Z | success | deployed https://relaxed-weasel-caprover.cloud.nexlayer.ai |
+<!-- nexlayer:end -->
