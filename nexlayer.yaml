@@ -2,12 +2,15 @@ application:
   name: caprover
   pods:
   - name: app
-    image: caprover/caprover:latest
+    image: "# filled by pipeline"
     path: /
     servicePorts:
     - 3000
     vars:
+      CAPROVER_NEXLAYER_NATIVE: "true"
+      IS_CAPTAIN_INSTANCE: "1"
       MAIN_NODE_DOMAIN_NAME: "relaxed-weasel-caprover.cloud.nexlayer.ai"
       ACCEPTED_TERMS: "true"
       MAIN_NODE_IP_ADDRESS: "127.0.0.1"
       BY_PASS_PROXY_CHECK: "TRUE"
+      NODE_ENV: "production"

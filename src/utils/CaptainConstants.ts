@@ -101,6 +101,11 @@ const data = {
 
     isDebug: EnvVars.CAPTAIN_IS_DEBUG,
 
+    // True when CapRover is running with the Nexlayer platform as its
+    // orchestration backend (no Docker / Swarm). Gates the native boot path
+    // in CaptainManager and the native DockerApi stub.
+    isNexlayerNative: EnvVars.CAPROVER_NEXLAYER_NATIVE,
+
     serviceContainerPort3000: 3000,
 
     rootNameSpace: 'captain',
