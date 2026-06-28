@@ -2,7 +2,7 @@ application:
   name: caprover
   pods:
   - name: app
-    image: caprover/caprover:latest
+    image: mirror.gcr.io/caprover/caprover:latest
     path: /
     servicePorts:
     - 3000
